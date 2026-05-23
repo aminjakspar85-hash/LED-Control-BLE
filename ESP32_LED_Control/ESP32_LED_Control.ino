@@ -21,6 +21,7 @@ Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 BLEServer *pServer = NULL;
 BLECharacteristic *pCharacteristic = NULL;
 bool deviceConnected = false;
+bool oldDeviceConnected = false;
 
 // متغيرات التحكم
 uint8_t globalBrightness = 255;    // السطوع (0-255)
@@ -33,30 +34,40 @@ class MyServerCallbacks : public BLEServerCallbacks {
     void onConnect(BLEServer *pServer) {
         deviceConnected = true;
         Serial.println("📱 تم الاتصال بالموبايل");
-        delay(500);
+        pServer->updateConnParams(0, 0);
     }
 
     void onDisconnect(BLEServer *pServer) {
         deviceConnected = false;
         Serial.println("📱 تم قطع الاتصال");
-        delay(500);
-        BLEDevice::startAdvertising();
-        Serial.println("🔄 بدء البحث مجدداً...");
     }
 };
 
-class MyCallbacks : public BLECharacteristicCallbacks {
+class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
+    void onRead(BLECharacteristic *pCharacteristic) {
+        Serial.println("📖 طلب قراءة من الموبايل");
+        pCharacteristic->setValue("LED_CONTROL_READY");
+    }
+
     void onWrite(BLECharacteristic *pCharacteristic) {
-        String value = pCharacteristic->getValue().c_str();
+        std::string value = pCharacteristic->getValue();
         
         if (value.length() > 0) {
-            String command = value;
+            String command = "";
+            for (size_t i = 0; i < value.length(); i++) {
+                command += (char)value[i];
+            }
             command.trim();
             command.toUpperCase();
+            
             Serial.print("📨 الأمر المستقبل: ");
             Serial.println(command);
             
             processCommand(command);
+            
+            // إرسال رد للموبايل
+            pCharacteristic->setValue("OK");
+            pCharacteristic->notify();
         }
     }
 };
@@ -199,30 +210,35 @@ void setup() {
     pServer->setCallbacks(new MyServerCallbacks());
     Serial.println("✅ BLE Server created");
     
-    // إنشاء الخدمة - استخدام Service UUID بسيط
-    BLEService *pService = pServer->createService(BLEUUID((uint16_t)0x180A));
+    // إنشاء الخدمة
+    BLEService *pService = pServer->createService("0000180A-0000-1000-8000-00805F9B34FB");
     Serial.println("✅ BLE Service created");
     
     // إنشاء الخاصية
     pCharacteristic = pService->createCharacteristic(
-        BLEUUID((uint16_t)0x2A58),
+        "0000FFF1-0000-1000-8000-00805F9B34FB",
         BLECharacteristic::PROPERTY_READ |
         BLECharacteristic::PROPERTY_WRITE |
-        BLECharacteristic::PROPERTY_NOTIFY |
-        BLECharacteristic::PROPERTY_WRITE_NR
+        BLECharacteristic::PROPERTY_WRITE_NR |
+        BLECharacteristic::PROPERTY_NOTIFY
     );
     Serial.println("✅ BLE Characteristic created");
     
+    // إضافة Descriptor للـ Notifications
     pCharacteristic->addDescriptor(new BLE2902());
-    pCharacteristic->setCallbacks(new MyCallbacks());
-    pCharacteristic->setValue("Ready");
+    
+    // إضافة Callback
+    pCharacteristic->setCallbacks(new MyCharacteristicCallbacks());
+    
+    // القيمة الابتدائية
+    pCharacteristic->setValue("READY");
     
     pService->start();
     Serial.println("✅ BLE Service started");
     
     // بدء الإعلان
     BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-    pAdvertising->addServiceUUID(BLEUUID((uint16_t)0x180A));
+    pAdvertising->addServiceUUID("0000180A-0000-1000-8000-00805F9B34FB");
     pAdvertising->setScanResponse(true);
     pAdvertising->setMinPreferred(0x06);
     pAdvertising->setMaxPreferred(0x12);
@@ -239,6 +255,19 @@ void setup() {
 
 // ======================== الحلقة الرئيسية (Loop) ========================
 void loop() {
+    // التحقق من تغيير حالة الاتصال
+    if (deviceConnected && !oldDeviceConnected) {
+        oldDeviceConnected = deviceConnected;
+        delay(500);
+    }
+    if (!deviceConnected && oldDeviceConnected) {
+        oldDeviceConnected = deviceConnected;
+        delay(500);
+        pServer->startAdvertising();
+        Serial.println("🔄 بدء البحث مجدداً...");
+    }
+    
+    // تنفيذ المودات
     switch (currentMode) {
         case 0:
             break;
