@@ -13,6 +13,12 @@
 #define SERVICE_UUID        "12345678-1234-1234-1234-123456789012"
 #define CHARACTERISTIC_UUID "87654321-4321-4321-4321-210987654321"
 
+// ======================== التصريحات المسبقة ========================
+void processCommand(String cmd);
+void updateLEDs();
+void pulseEffect();
+void fireEffect();
+
 // ======================== المتغيرات العامة ========================
 Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -45,7 +51,7 @@ class MyCallbacks : public BLECharacteristicCallbacks {
         std::string value = pCharacteristic->getValue();
         
         if (value.length() > 0) {
-            String command = String((char *)value.c_str());
+            String command = String(value.c_str());
             command.trim();
             Serial.print("📨 الأمر المستقبل: ");
             Serial.println(command);
