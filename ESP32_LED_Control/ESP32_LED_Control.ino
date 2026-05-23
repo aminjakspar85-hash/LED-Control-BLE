@@ -48,10 +48,10 @@ class MyServerCallbacks : public BLEServerCallbacks {
 
 class MyCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
-        std::string value = pCharacteristic->getValue();
+        String value = pCharacteristic->getValue().c_str();
         
         if (value.length() > 0) {
-            String command = String(value.c_str());
+            String command = value;
             command.trim();
             Serial.print("📨 الأمر المستقبل: ");
             Serial.println(command);
