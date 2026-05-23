@@ -9,10 +9,6 @@
 #define NUM_LEDS 8          // 8 ليدات
 #define LED_BRIGHTNESS 255  // السطوع الابتدائي
 
-// UUIDs للـ BLE
-#define SERVICE_UUID        "12345678-1234-1234-1234-123456789012"
-#define CHARACTERISTIC_UUID "87654321-4321-4321-4321-210987654321"
-
 // ======================== التصريحات المسبقة ========================
 void processCommand(String cmd);
 void updateLEDs();
@@ -37,12 +33,15 @@ class MyServerCallbacks : public BLEServerCallbacks {
     void onConnect(BLEServer *pServer) {
         deviceConnected = true;
         Serial.println("📱 تم الاتصال بالموبايل");
+        delay(500);
     }
 
     void onDisconnect(BLEServer *pServer) {
         deviceConnected = false;
         Serial.println("📱 تم قطع الاتصال");
-        pServer->startAdvertising();
+        delay(500);
+        BLEDevice::startAdvertising();
+        Serial.println("🔄 بدء البحث مجدداً...");
     }
 };
 
@@ -53,6 +52,7 @@ class MyCallbacks : public BLECharacteristicCallbacks {
         if (value.length() > 0) {
             String command = value;
             command.trim();
+            command.toUpperCase();
             Serial.print("📨 الأمر المستقبل: ");
             Serial.println(command);
             
@@ -75,13 +75,13 @@ void processCommand(String cmd) {
         updateLEDs();
     }
     else if (cmd == "BRIGHTNESS_UP") {
-        globalBrightness = min(255, globalBrightness + 13);  // 5% من 255
+        globalBrightness = min(255, globalBrightness + 13);
         Serial.print("⬆️ زيادة السطوع: ");
         Serial.println(globalBrightness);
         updateLEDs();
     }
     else if (cmd == "BRIGHTNESS_DOWN") {
-        globalBrightness = max(0, globalBrightness - 13);   // 5% من 255
+        globalBrightness = max(0, globalBrightness - 13);
         Serial.print("⬇️ خفض السطوع: ");
         Serial.println(globalBrightness);
         updateLEDs();
@@ -133,7 +133,7 @@ void updateLEDs() {
 void pulseEffect() {
     static unsigned long lastUpdate = 0;
     static uint8_t brightness = 255;
-    static int8_t direction = -5;  // اتجاه التغيير
+    static int8_t direction = -5;
     
     if (millis() - lastUpdate < 50) return;
     lastUpdate = millis();
@@ -155,23 +155,18 @@ void fireEffect() {
     lastUpdate = millis();
     
     for (int i = 0; i < NUM_LEDS; i++) {
-        // ألوان النار: أحمر، برتقالي، أصفر مع عشوائية
-        uint8_t fireColor = random(0, 3);  // 0: أحمر، 1: برتقالي، 2: أصفر
-        uint8_t flicker = random(100, 256);  // ارتعاش
+        uint8_t fireColor = random(0, 3);
+        uint8_t flicker = random(100, 256);
         
         uint32_t color;
         if (fireColor == 0) {
-            // أحمر
             color = strip.Color(255, 0, 0);
         } else if (fireColor == 1) {
-            // برتقالي
             color = strip.Color(255, 100, 0);
         } else {
-            // أصفر
             color = strip.Color(255, 255, 0);
         }
         
-        // تطبيق الارتعاش
         uint8_t r = (uint8_t)((uint16_t)((color >> 16) & 0xFF) * flicker / 256);
         uint8_t g = (uint8_t)((uint16_t)((color >> 8) & 0xFF) * flicker / 256);
         uint8_t b = (uint8_t)((uint16_t)(color & 0xFF) * flicker / 256);
@@ -194,52 +189,63 @@ void setup() {
     // تهيئة الليدات
     strip.begin();
     strip.show();
+    Serial.println("✅ الليدات جاهزة");
     
     // تهيئة البلوتوث
     BLEDevice::init("LED_CONTROL_BLE");
+    Serial.println("✅ BLE Device initialized");
+    
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(new MyServerCallbacks());
+    Serial.println("✅ BLE Server created");
     
-    // إنشاء الخدمة (Service)
-    BLEService *pService = pServer->createService(SERVICE_UUID);
+    // إنشاء الخدمة - استخدام Service UUID بسيط
+    BLEService *pService = pServer->createService(BLEUUID((uint16_t)0x180A));
+    Serial.println("✅ BLE Service created");
     
-    // إنشاء الخاصية (Characteristic)
+    // إنشاء الخاصية
     pCharacteristic = pService->createCharacteristic(
-        CHARACTERISTIC_UUID,
+        BLEUUID((uint16_t)0x2A58),
         BLECharacteristic::PROPERTY_READ |
         BLECharacteristic::PROPERTY_WRITE |
-        BLECharacteristic::PROPERTY_NOTIFY
+        BLECharacteristic::PROPERTY_NOTIFY |
+        BLECharacteristic::PROPERTY_WRITE_NR
     );
+    Serial.println("✅ BLE Characteristic created");
     
     pCharacteristic->addDescriptor(new BLE2902());
     pCharacteristic->setCallbacks(new MyCallbacks());
     pCharacteristic->setValue("Ready");
     
     pService->start();
+    Serial.println("✅ BLE Service started");
     
     // بدء الإعلان
     BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-    pAdvertising->addServiceUUID(SERVICE_UUID);
-    pAdvertising->setScanResponse(false);
-    pAdvertising->setMinPreferred(0x0);
+    pAdvertising->addServiceUUID(BLEUUID((uint16_t)0x180A));
+    pAdvertising->setScanResponse(true);
+    pAdvertising->setMinPreferred(0x06);
+    pAdvertising->setMaxPreferred(0x12);
     BLEDevice::startAdvertising();
+    Serial.println("✅ BLE Advertising started");
     
-    Serial.println("✅ البلوتوث جاهز - اسم الجهاز: LED_CONTROL_BLE");
     Serial.println("═══════════════════════════════════════");
+    Serial.println("📱 اسم الجهاز: LED_CONTROL_BLE");
+    Serial.println("🔍 ابحث عنه في البلوتوث على الموبايل");
+    Serial.println("═══════════════════════════════════════\n");
     
     updateLEDs();
 }
 
 // ======================== الحلقة الرئيسية (Loop) ========================
 void loop() {
-    // تنفيذ المودات
     switch (currentMode) {
-        case 0:  // Static mode
+        case 0:
             break;
-        case 1:  // Pulse mode
+        case 1:
             pulseEffect();
             break;
-        case 2:  // Fire mode
+        case 2:
             fireEffect();
             break;
     }
