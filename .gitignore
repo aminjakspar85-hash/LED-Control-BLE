@@ -1,0 +1,38 @@
+# Arduino
+build/
+dist/
+*.o
+*.a
+*.so
+*.dll
+*.exe
+*.elf
+*.bin
+*.hex
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Dependencies
+node_modules/
+vendor/
+.gradle/
+
+# Build artifacts
+bin/
+obj/
+out/
+
+# Backup files
+*.bak
+*.tmp
+*.log
+
+# OS files
+Thumbs.db
+.DS_Store
